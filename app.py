@@ -1,6 +1,6 @@
 import os
 import warnings
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, session
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain.chains import create_retrieval_chain, create_history_aware_retriever
 from langchain.chains.combine_documents import create_stuff_documents_chain
@@ -10,8 +10,10 @@ from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
+import uuid
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24)  # Set a secret key for session management
 
 # Suppress warnings
 warnings.filterwarnings('ignore')
@@ -34,14 +36,7 @@ def load_documents(urls, local_directory):
 
 # List of URLs and local directory
 urls = [
-    # "https://traqq.com/blog/the-ultimate-guide-on-time-management/",
-    # "https://www.juliemorgenstern.com/tips-tools-blog/tag/Time+Management",
-    # "https://saiuniversity.edu.in/tips-to-help-you-master-the-art-of-time-management/",
-    # "https://www.lucidchart.com/blog/time-management-at-work",
     "https://www.workast.com/blog/time-management-and-productivity-in-the-modern-workplace/",
-    # "https://www.betterup.com/blog/effective-strategies-to-improve-your-communication-skills",
-    # "https://asana.com/resources/effective-communication-workplace",
-
 ]
 local_directory = "time_management_articles"
 
@@ -76,7 +71,6 @@ Your interaction with the user should follow this structure:
 Throughout the session, be supportive and maintain a therapeutic tone. If the user does not ask for suggestions, keep the focus on asking clarifying questions and helping them reflect on their problem. If at any point the user veers off topic, gently redirect them back to their challenges.
 {context}
 """
-
 
 chat_prompt = ChatPromptTemplate.from_messages([
     ("system", system_prompt),
@@ -133,15 +127,24 @@ def time_management_mentor(question: str, session_id: str = "user") -> str:
 
 @app.route('/')
 def home():
+    session['user_id'] = str(uuid.uuid4())  # Always generate a new user_id
     return render_template('index.html')
 
 @app.route('/chat', methods=['POST'])
 def chat():
     data = request.json
     user_input = data['message']
-    session_id = data.get('session_id', 'default_user')
+    session_id = session.get('user_id', str(uuid.uuid4()))
     response = time_management_mentor(user_input, session_id)
     return jsonify({'response': response})
+
+@app.route('/reset_session', methods=['POST'])
+def reset_session():
+    session_id = session.get('user_id')
+    if session_id in store:
+        del store[session_id]
+    session['user_id'] = str(uuid.uuid4())
+    return jsonify({'status': 'success', 'message': 'Session reset successfully'})
 
 if __name__ == '__main__':
     app.run(debug=True)

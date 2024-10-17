@@ -9,3 +9,4 @@ Werkzeug==2.2.2
 langchain-community==0.3.2
 langchain-chroma==0.1.4
 protobuf==3.20.3
+uuid ==1.30

@@ -19,7 +19,7 @@
             background-image: url('https://i.imgur.com/LNky4Mt.png');
             background-size: cover;
             background-blend-mode: overlay;
-            flex-direction: column; /* Add flex-direction to column */
+            flex-direction: column;
         }
 
         .chat-container {
@@ -32,8 +32,8 @@
             display: flex;
             flex-direction: column;
             border: 1px solid #e0e0e0;
-            position: relative; /* Position relative for footer */
-            margin-bottom: 20px; /* Space between chat and footer */
+            position: relative;
+            margin-bottom: 20px;
         }
 
         h1 {
@@ -54,7 +54,7 @@
             background-color: #fafafa;
             margin-bottom: 15px;
             box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
-            font-size: 0.9em; /* Decreased font size */
+            font-size: 0.9em;
             display: flex;
             flex-direction: column;
         }
@@ -150,14 +150,12 @@
         footer {
             text-align: center;
             color: #333;
-            font-size: 0.8em; /* Smaller font size for the footer */
+            font-size: 0.8em;
             margin-top: 20px;
         }
     </style>
 
-    <!-- Add marked.js via CDN -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-
 </head>
 
 <body>
@@ -177,6 +175,25 @@
         const userInput = document.getElementById('user-input');
         const sendButton = document.getElementById('send-button');
 
+        // Function to reset the session
+        async function resetSession() {
+            try {
+                const response = await fetch('/reset_session', {
+                    method: 'POST',
+                });
+                if (response.ok) {
+                    console.log('Session reset successfully');
+                } else {
+                    console.error('Failed to reset session');
+                }
+            } catch (error) {
+                console.error('Error resetting session:', error);
+            }
+        }
+
+        // Call resetSession when the page is about to unload (refresh or close)
+        window.addEventListener('beforeunload', resetSession);
+
         function addMessage(sender, message, isLoading = false) {
             const messageHTML = isLoading ? message : marked.parse(message);
             const messageElement = document.createElement('div');
@@ -189,7 +206,7 @@
             }
 
             chatbox.appendChild(messageElement);
-            chatbox.scrollTop = chatbox.scrollHeight; // Scroll to the bottom after appending a message
+            chatbox.scrollTop = chatbox.scrollHeight;
 
             return messageElement;
         }
@@ -220,7 +237,6 @@
                 } catch (error) {
                     loadingMessage.innerHTML = '<strong>System:</strong> Error: Unable to connect to the server.';
                 }
-                // Ensure it scrolls to the bottom after loading the message
                 chatbox.scrollTop = chatbox.scrollHeight;
             }
         }
@@ -232,7 +248,12 @@
             }
         });
 
-        addMessage('Mentor', "Hello! I'm here to help you.");
+        // Reset session and clear chatbox when the page loads
+        window.addEventListener('load', () => {
+            resetSession();
+            chatbox.innerHTML = '';
+            addMessage('Mentor', "Hello! I'm here to help you.");
+        });
     </script>
 </body>
 
