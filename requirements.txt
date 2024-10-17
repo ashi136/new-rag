@@ -5,3 +5,4 @@ requests==2.25.1
 beautifulsoup4==4.12.3
 chromadb==0.5.13
 Werkzeug==2.2.3
+Gunicorn==22.0.0
