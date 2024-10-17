@@ -34,13 +34,13 @@ def load_documents(urls, local_directory):
 
 # List of URLs and local directory
 urls = [
-    "https://traqq.com/blog/the-ultimate-guide-on-time-management/",
-    "https://www.juliemorgenstern.com/tips-tools-blog/tag/Time+Management",
-    "https://saiuniversity.edu.in/tips-to-help-you-master-the-art-of-time-management/",
-    "https://www.lucidchart.com/blog/time-management-at-work",
+    # "https://traqq.com/blog/the-ultimate-guide-on-time-management/",
+    # "https://www.juliemorgenstern.com/tips-tools-blog/tag/Time+Management",
+    # "https://saiuniversity.edu.in/tips-to-help-you-master-the-art-of-time-management/",
+    # "https://www.lucidchart.com/blog/time-management-at-work",
     "https://www.workast.com/blog/time-management-and-productivity-in-the-modern-workplace/",
-    "https://www.betterup.com/blog/effective-strategies-to-improve-your-communication-skills",
-    "https://asana.com/resources/effective-communication-workplace",
+    # "https://www.betterup.com/blog/effective-strategies-to-improve-your-communication-skills",
+    # "https://asana.com/resources/effective-communication-workplace",
 
 ]
 local_directory = "time_management_articles"
@@ -143,5 +143,5 @@ def chat():
     response = time_management_mentor(user_input, session_id)
     return jsonify({'response': response})
 
-# if __name__ == '__main__':
-#     app.run(debug=True)
+if __name__ == '__main__':
+    app.run(debug=True)

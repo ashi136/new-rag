@@ -4,6 +4,8 @@ langchain-google-genai==2.0.1
 requests==2.25.1
 beautifulsoup4==4.12.3
 chromadb==0.5.13
-Werkzeug==2.2.3
 Gunicorn==22.0.0
+Werkzeug==2.2.2
 langchain-community==0.3.2
+langchain-chroma==0.1.4
+protobuf==3.20.3
