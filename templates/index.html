@@ -96,9 +96,7 @@
             color: #333;
         }
 
-        #send-button {
-            background-color: #3b5998;
-            color: #fff;
+        #send-button, #new-chat-button {
             padding: 12px 18px;
             border: none;
             border-radius: 8px;
@@ -110,8 +108,28 @@
             transition: background-color 0.3s ease;
         }
 
+        #send-button {
+            background-color: #3b5998;
+            color: #fff;
+        }
+
         #send-button:hover {
             background-color: #2a4371;
+        }
+
+        #new-chat-button {
+            background-color: #4CAF50;
+            color: #fff;
+            margin-left: 10px;
+        }
+
+        #new-chat-button:hover {
+            background-color: #45a049;
+        }
+
+        .button-container {
+            display: flex;
+            justify-content: space-between;
         }
 
         #loading-message .loading {
@@ -126,25 +144,13 @@
         }
 
         @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: scale(0.95);
-            }
-
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
         }
 
         footer {
@@ -163,7 +169,10 @@
         <h1>Mentor Bot</h1>
         <div id="chatbox"></div>
         <input type="text" id="user-input" placeholder="Type your message...">
-        <button id="send-button">Send</button>
+        <div class="button-container">
+            <button id="new-chat-button"> + New Chat</button>
+            <button id="send-button">Send message</button>
+        </div>
     </div>
     
     <footer>
@@ -174,8 +183,8 @@
         const chatbox = document.getElementById('chatbox');
         const userInput = document.getElementById('user-input');
         const sendButton = document.getElementById('send-button');
+        const newChatButton = document.getElementById('new-chat-button');
 
-        // Function to reset the session
         async function resetSession() {
             try {
                 const response = await fetch('/reset_session', {
@@ -191,7 +200,6 @@
             }
         }
 
-        // Call resetSession when the page is about to unload (refresh or close)
         window.addEventListener('beforeunload', resetSession);
 
         function addMessage(sender, message, isLoading = false) {
@@ -241,6 +249,12 @@
             }
         }
 
+        async function startNewChat() {
+            await resetSession();
+            chatbox.innerHTML = '';
+            addMessage('Mentor', "Hello! I'm here to help you with a new session.");
+        }
+
         sendButton.addEventListener('click', sendMessage);
         userInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
@@ -248,12 +262,9 @@
             }
         });
 
-        // Reset session and clear chatbox when the page loads
-        window.addEventListener('load', () => {
-            resetSession();
-            chatbox.innerHTML = '';
-            addMessage('Mentor', "Hello! I'm here to help you.");
-        });
+        newChatButton.addEventListener('click', startNewChat);
+
+        window.addEventListener('load', startNewChat);
     </script>
 </body>
 

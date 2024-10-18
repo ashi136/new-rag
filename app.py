@@ -18,8 +18,6 @@ app.secret_key = os.urandom(24)  # Set a secret key for session management
 # Suppress warnings
 warnings.filterwarnings('ignore')
 
-# Initialize embeddings and model
-os.environ["GOOGLE_API_KEY"] = "AIzaSyATvhsUfFxouR-6HJmiC73RO-rIrQx3BAE"
 gemini_embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 model = ChatGoogleGenerativeAI(model="gemini-1.5-pro-latest", convert_system_to_human=True)
 
