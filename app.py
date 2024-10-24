@@ -13,9 +13,6 @@ from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
-from langchain.chains import LLMChain
-from langchain_core.messages import HumanMessage, AIMessage
-
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # Set a secret key for session management
@@ -154,71 +151,6 @@ rag_chain = create_retrieval_chain(history_aware_retriever, question_answering_c
 # Set up conversation history
 store = {}
 
-def get_last_n_messages(session_id, n=10):
-    """Retrieve the last n messages for a given session."""
-    conn = sqlite3.connect('chat_history.db')
-    c = conn.cursor()
-    c.execute('''SELECT message, response, timestamp 
-                 FROM conversations 
-                 WHERE session_id = ? 
-                 ORDER BY timestamp DESC 
-                 LIMIT ?''', (session_id, n))
-    messages = c.fetchall()
-    conn.close()
-    return list(reversed(messages))  # Return in chronological order
-
-def summarize_history(model, messages):
-    """Summarize the chat history using the LLM."""
-    summary_prompt = ChatPromptTemplate.from_messages([
-        ("system", """Summarize the following conversation history between a user and an AI mentor. 
-                     Focus on the main topics discussed, key insights, and any action items or advice given. 
-                     Keep the summary concise but include important context for future reference."""),
-        ("human", "{conversation}")
-    ])
-    
-    # Format conversation history into a single string
-    conversation = "\n".join([
-        f"User: {msg[0]}\nAI: {msg[1]}\n"
-        for msg in messages
-    ])
-    
-    # Create and run the summarization chain
-    summary_chain = LLMChain(llm=model, prompt=summary_prompt)
-    summary = summary_chain.invoke({"conversation": conversation})
-    return summary["text"]
-
-def get_context_with_summary(session_id, model, max_messages=10):
-    """Get the conversation context with history summary."""
-    # Get all messages for the session
-    conn = sqlite3.connect('chat_history.db')
-    c = conn.cursor()
-    c.execute('''SELECT message, response, timestamp 
-                 FROM conversations 
-                 WHERE session_id = ? 
-                 ORDER BY timestamp''', (session_id,))
-    all_messages = c.fetchall()
-    conn.close()
-    
-    if len(all_messages) <= max_messages:
-        return all_messages
-    
-    # Split into historical and recent messages
-    historical_messages = all_messages[:-max_messages]
-    recent_messages = all_messages[-max_messages:]
-    
-    # Summarize historical messages
-    history_summary = summarize_history(model, historical_messages)
-    
-    # Create a summary message tuple
-    summary_message = (
-        "Previous conversation summary",
-        history_summary,
-        recent_messages[0][2]  # Use timestamp of first recent message
-    )
-    
-    # Return summary followed by recent messages
-    return [summary_message] + recent_messages
-
 def get_session_history(session_id: str):
     if session_id not in store:
         store[session_id] = ChatMessageHistory()
@@ -234,28 +166,10 @@ conversational_rag_chain = RunnableWithMessageHistory(
 
 # Function to interact with the time management mentor
 def time_management_mentor(question: str, session_id: str = "user") -> str:
-    # Get context with summary and recent messages
-    context = get_context_with_summary(session_id, model)
-    
-    # Update the conversation history for the chain
-    history = get_session_history(session_id)
-    
-    # Clear existing history to prevent duplication
-    history.clear()
-    
-    for msg in context:
-        if msg[0] == "Previous conversation summary":
-            history.add_message(AIMessage(content=f"Previous conversation summary: {msg[1]}"))
-        else:
-            history.add_message(HumanMessage(content=msg[0]))
-            history.add_message(AIMessage(content=msg[1]))
-    
-    # Invoke the chain with the updated history
     response = conversational_rag_chain.invoke(
         {"input": question},
         config={"configurable": {"session_id": session_id}},
     )
-    
     return response["answer"]
 
 @app.route('/')
