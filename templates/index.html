@@ -96,7 +96,7 @@
             color: #333;
         }
 
-        #send-button, #new-chat-button {
+        #send-button, #new-chat-button, #view-history-button {
             padding: 12px 18px;
             border: none;
             border-radius: 8px;
@@ -125,6 +125,113 @@
 
         #new-chat-button:hover {
             background-color: #45a049;
+        }
+
+        #view-history-button {
+            background-color: #ff9800;
+            color: #fff;
+            margin-left: 10px;
+        }
+        #mic-button {
+            background-color: #794bc4;
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 44px; /* Slightly smaller to match input height */
+            height: 44px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            flex-shrink: 0; /* Prevent button from shrinking */
+        }
+
+
+        #mic-button:hover {
+            background-color: #663399;
+        }
+
+        #mic-button.recording {
+            background-color: #dc3545;
+            animation: pulse 1.5s infinite;
+        }
+
+        .button-container {
+            display: flex;
+            justify-content: flex-start; /* Align buttons to the left */
+            gap: 10px;
+            margin-bottom:5px;
+        }
+
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .input-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            gap: 10px; /* Add space between elements */
+        }
+
+
+        #user-input {
+            flex-grow: 1;
+            padding: 12px;
+            font-size: 1em;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Recording indicator */
+        .recording-indicator {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 5px;
+        }
+
+        .recording-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #dc3545;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+
+        #view-history-button:hover {
+            background-color: #e68a00;
+        }
+        .session-header {
+            background-color: #f0f0f0;
+            padding: 10px;
+            margin-top: 20px;
+            border-radius: 5px;
+            font-weight: bold;
         }
 
         .button-container {
@@ -167,13 +274,25 @@
 <body>
     <div class="chat-container">
         <h1>Mentor Bot</h1>
+        <div class='button-container'>
+            <button id="view-history-button">View History</button>
+            <button id="new-chat-button">+ New Chat</button>
+        </div>
         <div id="chatbox"></div>
-        <input type="text" id="user-input" placeholder="Type your message...">
-        <div class="button-container">
-            <button id="new-chat-button"> + New Chat</button>
+        <div class="input-container">
+            <input type="text" id="user-input" placeholder="Type your message...">
+            <button id="mic-button" title="Click to speak">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+            </button>
             <button id="send-button">Send message</button>
         </div>
     </div>
+
     
     <footer>
         WE CARE ABOUT YOUR PRIVACY. Please feel free to talk as this conversation will remain private.
@@ -184,6 +303,7 @@
         const userInput = document.getElementById('user-input');
         const sendButton = document.getElementById('send-button');
         const newChatButton = document.getElementById('new-chat-button');
+        const viewHistoryButton = document.getElementById('view-history-button');
 
         async function resetSession() {
             try {
@@ -218,7 +338,95 @@
 
             return messageElement;
         }
+        const micButton = document.getElementById('mic-button');
+        let recognition = null;
 
+        // Initialize speech recognition
+        function initializeSpeechRecognition() {
+            if ('webkitSpeechRecognition' in window) {
+                recognition = new webkitSpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = 'en-US';
+        
+                recognition.onstart = function() {
+                    micButton.classList.add('recording');
+                    userInput.placeholder = "Listening...";
+                    finalDiv.textContent = '';
+                    interimDiv.textContent = '';
+                };
+        
+                recognition.onend = function() {
+                    micButton.classList.remove('recording');
+                    userInput.placeholder = "Type your message...";
+                    
+                    // If there's final text, send the message
+                    if (userInput.value.trim()) {
+                        sendMessage();
+                    }
+                };
+        
+                recognition.onresult = function(event) {
+                    let finalTranscript = '';
+                    let interimTranscript = '';
+        
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        const transcript = event.results[i][0].transcript;
+                        
+                        if (event.results[i].isFinal) {
+                            finalTranscript += transcript;
+                        } else {
+                            interimTranscript += transcript;
+                        }
+                    }
+        
+                    // Combine final and interim results for real-time display
+                    userInput.value = finalTranscript + interimTranscript;
+        
+                    // Update the feedback display
+                    if (finalTranscript) {
+                        finalDiv.textContent = finalTranscript;
+                    }
+                    interimDiv.textContent = interimTranscript;
+                };
+        
+                recognition.onerror = function(event) {
+                    console.error('Speech recognition error:', event.error);
+                    micButton.classList.remove('recording');
+                    userInput.placeholder = "Type your message...";
+                };
+            } else {
+                micButton.style.display = 'none';
+                console.log('Speech recognition not supported');
+            }
+        }
+        
+
+        // Toggle voice input
+        function toggleVoiceInput() {
+            if (!recognition) {
+                initializeSpeechRecognition();
+            }
+
+            if (micButton.classList.contains('recording')) {
+                recognition.stop();
+            } else {
+                recognition.start();
+            }
+        }
+
+        // Add event listener for microphone button
+        micButton.addEventListener('click', toggleVoiceInput);
+
+        // Add event listener for keyboard input to hide speech feedback
+        userInput.addEventListener('keydown', function() {
+        });
+
+        // Initialize speech recognition when the page loads
+        window.addEventListener('load', function() {
+            initializeSpeechRecognition();
+            startNewChat();
+        });
         async function sendMessage() {
             const message = userInput.value.trim();
             if (message) {
@@ -250,9 +458,54 @@
         }
 
         async function startNewChat() {
-            await resetSession();
-            chatbox.innerHTML = '';
-            addMessage('Mentor', "Hello! I'm here to help you with a new session.");
+            try {
+                const response = await fetch('/reset_session', { method: 'POST' });
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('New user_id:', data.new_user_id);
+                    chatbox.innerHTML = '';
+                    addMessage('Mentor', "Hello! I'm here to help you with a new session.");
+                } else {
+                    console.error('Failed to reset session');
+                }
+            } catch (error) {
+                console.error('Error resetting session:', error);
+            }
+        }
+
+        async function viewHistory() {
+            try {
+                const response = await fetch('/history');
+                if (response.ok) {
+                    const data = await response.json();
+                    let historyHTML = '<h2>Conversation History</h2>';
+                    let currentSessionId = null;
+                    let isFirstMessageInSession = true;
+                    
+                    data.history.forEach(([sessionId, sessionCreatedAt, message, response, timestamp]) => {
+                        if (sessionId !== currentSessionId) {
+                            currentSessionId = sessionId;
+                            isFirstMessageInSession = true;
+                        }
+                        
+                        if (message && response) {
+                            if (isFirstMessageInSession) {
+                                historyHTML += `<div class="session-header">Session started on ${new Date(sessionCreatedAt).toLocaleString()}</div>`;
+                                isFirstMessageInSession = false;
+                            }
+                            
+                            historyHTML += `<p><strong>You (${new Date(timestamp).toLocaleString()}):</strong> ${message}</p>`;
+                            historyHTML += `<p><strong>Mentor:</strong> ${response}</p>`;
+                        }
+                    });
+                    
+                    chatbox.innerHTML = historyHTML;
+                } else {
+                    console.error('Failed to fetch history');
+                }
+            } catch (error) {
+                console.error('Error fetching history:', error);
+            }
         }
 
         sendButton.addEventListener('click', sendMessage);
@@ -263,6 +516,7 @@
         });
 
         newChatButton.addEventListener('click', startNewChat);
+        viewHistoryButton.addEventListener('click', viewHistory);
 
         window.addEventListener('load', startNewChat);
     </script>

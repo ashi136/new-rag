@@ -1,5 +1,8 @@
 import os
 import warnings
+import sqlite3
+from datetime import datetime
+import uuid
 from flask import Flask, request, jsonify, render_template, session
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain.chains import create_retrieval_chain, create_history_aware_retriever
@@ -10,13 +13,64 @@ from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
-import uuid
+from langchain.chains import LLMChain
+from langchain_core.messages import HumanMessage, AIMessage
+
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # Set a secret key for session management
 
 # Suppress warnings
 warnings.filterwarnings('ignore')
+
+# Database setup
+def setup_database():
+    conn = sqlite3.connect('chat_history.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS conversations
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  session_id TEXT,
+                  message TEXT,
+                  response TEXT,
+                  timestamp DATETIME)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS sessions
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  session_id TEXT UNIQUE,
+                  created_at DATETIME)''')
+    conn.commit()
+    conn.close()
+
+# Function to save a conversation to the database
+def save_conversation(session_id, message, response):
+    conn = sqlite3.connect('chat_history.db')
+    c = conn.cursor()
+    c.execute('''INSERT INTO conversations (session_id, message, response, timestamp)
+                 VALUES (?, ?, ?, ?)''', (session_id, message, response, datetime.now()))
+    conn.commit()
+    conn.close()
+
+# Function to get all conversation history
+def get_all_conversation_history():
+    conn = sqlite3.connect('chat_history.db')
+    c = conn.cursor()
+    c.execute('''SELECT s.session_id, s.created_at, c.message, c.response, c.timestamp 
+                 FROM sessions s
+                 LEFT JOIN conversations c ON s.session_id = c.session_id
+                 ORDER BY s.created_at DESC, c.timestamp ASC''')
+    history = c.fetchall()
+    conn.close()
+    return history
+
+# Function to create a new session
+def create_new_session():
+    session_id = str(uuid.uuid4())
+    conn = sqlite3.connect('chat_history.db')
+    c = conn.cursor()
+    c.execute('''INSERT INTO sessions (session_id, created_at) VALUES (?, ?)''', 
+              (session_id, datetime.now()))
+    conn.commit()
+    conn.close()
+    return session_id
 
 gemini_embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 model = ChatGoogleGenerativeAI(model="gemini-1.5-pro-latest", convert_system_to_human=True)
@@ -49,25 +103,23 @@ retriever = vectorstore.as_retriever()
 
 # Define prompts
 system_prompt = """
-You are a knowledgeable and supportive mentor who acts as a therapist. 
+You are a knowledgeable and supportive mentor who acts as a therapist.
 Your interaction with the user should follow this structure:
 
 1. **Understanding the Problem**:
-   - Ask open-ended questions to help the user articulate their problem. Encourage them to share their feelings and thoughts.
-   - Listen carefully to their responses and ask clarifying questions to gain a deeper understanding of their situation. Aim to make the user feel heard and understood.
-   - Continue asking questions to help the user explore their thoughts and feelings deeply. **Do not offer suggestions unless the user explicitly asks for advice or solutions.** 
+   - Start by asking open-ended questions to help the user articulate their problem. Encourage them to share their thoughts and feelings fully.
+   - Listen carefully to their responses and ask clarifying questions to deepen your understanding of their situation. Your goal is to make the user feel truly heard and understood.
+   - Continue asking reflective questions to guide the user in exploring their thoughts, feelings, and motivations. Avoid jumping to solutions. If the user seems unclear or unsure about their problem, gently help them unpack it with more questions.
 
-2. **Providing Solutions**:
-   - Only go to this step if the user requests advice or shows interest in receiving solutions.
-   - Once the user feels comfortable and has shared enough, provide actionable solutions tailored to their situation if requested. Ask follow-up questions to ensure they comprehend the advice, such as, "How do you think you could apply this strategy in your daily routine?"
-   - Explore which solutions resonate with the user and discuss potential implementation strategies only if they are open to it. If they do not ask for solutions, continue to ask thoughtful questions to guide their reflection.
+2. **Testing Understanding**(Required after giving solutions):
+   - After discussing solutions, offer the user an opportunity to practice applying the concepts through hypothetical scenarios. For example, "Imagine you're facing a tight deadline and feeling stressed. How would you approach prioritizing your tasks?"
+   - Assess their response and provide constructive feedback. Correct any misunderstandings and guide them on how to improve their approach.
 
-3. **Testing Understanding**:
-   - After discussing solutions or exploring their reflections, test the user's understanding by presenting them with hypothetical scenarios or situations related to their problem. For instance, "Imagine you have a deadline approaching and you're feeling overwhelmed. How would you prioritize your tasks?"
-   - **Evaluate their responses to the scenarios and provide constructive feedback1**. Encourage them to reflect on their answers and consider alternative approaches if needed.
+3. **Wrap-Up**(Required):
+   - Reassure the user by summarizing their progress. Ask if they'd like to practice another scenario or reflect further on their journey before concluding the session.
 
-Throughout the session, be supportive and maintain a therapeutic tone. If the user does not ask for suggestions, keep the focus on asking clarifying questions and helping them reflect on their problem. If at any point the user veers off topic, gently redirect them back to their challenges.
-{context}
+Throughout, maintain a supportive and therapeutic tone. If the user does not ask for advice, continue to focus on questions that promote deeper reflection. Only offer suggestions if the user explicitly asks for them. When they seem unsure or off-track, gently steer them back to their challenge without rushing to provide solutions.
+   {context}
 """
 
 chat_prompt = ChatPromptTemplate.from_messages([
@@ -85,7 +137,7 @@ Given the chat history and the latest user question,
 formulate a standalone question which can be understood without the chat history.
 Focus on extracting the core concept or issue from the user's input.
 If the user's question is not related to mentoring, rephrase it to ask about
-the most relevant time management topic.
+the most relevant topic.
 """
 
 contextualize_q_prompt = ChatPromptTemplate.from_messages([
@@ -102,6 +154,71 @@ rag_chain = create_retrieval_chain(history_aware_retriever, question_answering_c
 # Set up conversation history
 store = {}
 
+def get_last_n_messages(session_id, n=10):
+    """Retrieve the last n messages for a given session."""
+    conn = sqlite3.connect('chat_history.db')
+    c = conn.cursor()
+    c.execute('''SELECT message, response, timestamp 
+                 FROM conversations 
+                 WHERE session_id = ? 
+                 ORDER BY timestamp DESC 
+                 LIMIT ?''', (session_id, n))
+    messages = c.fetchall()
+    conn.close()
+    return list(reversed(messages))  # Return in chronological order
+
+def summarize_history(model, messages):
+    """Summarize the chat history using the LLM."""
+    summary_prompt = ChatPromptTemplate.from_messages([
+        ("system", """Summarize the following conversation history between a user and an AI mentor. 
+                     Focus on the main topics discussed, key insights, and any action items or advice given. 
+                     Keep the summary concise but include important context for future reference."""),
+        ("human", "{conversation}")
+    ])
+    
+    # Format conversation history into a single string
+    conversation = "\n".join([
+        f"User: {msg[0]}\nAI: {msg[1]}\n"
+        for msg in messages
+    ])
+    
+    # Create and run the summarization chain
+    summary_chain = LLMChain(llm=model, prompt=summary_prompt)
+    summary = summary_chain.invoke({"conversation": conversation})
+    return summary["text"]
+
+def get_context_with_summary(session_id, model, max_messages=10):
+    """Get the conversation context with history summary."""
+    # Get all messages for the session
+    conn = sqlite3.connect('chat_history.db')
+    c = conn.cursor()
+    c.execute('''SELECT message, response, timestamp 
+                 FROM conversations 
+                 WHERE session_id = ? 
+                 ORDER BY timestamp''', (session_id,))
+    all_messages = c.fetchall()
+    conn.close()
+    
+    if len(all_messages) <= max_messages:
+        return all_messages
+    
+    # Split into historical and recent messages
+    historical_messages = all_messages[:-max_messages]
+    recent_messages = all_messages[-max_messages:]
+    
+    # Summarize historical messages
+    history_summary = summarize_history(model, historical_messages)
+    
+    # Create a summary message tuple
+    summary_message = (
+        "Previous conversation summary",
+        history_summary,
+        recent_messages[0][2]  # Use timestamp of first recent message
+    )
+    
+    # Return summary followed by recent messages
+    return [summary_message] + recent_messages
+
 def get_session_history(session_id: str):
     if session_id not in store:
         store[session_id] = ChatMessageHistory()
@@ -117,32 +234,58 @@ conversational_rag_chain = RunnableWithMessageHistory(
 
 # Function to interact with the time management mentor
 def time_management_mentor(question: str, session_id: str = "user") -> str:
+    # Get context with summary and recent messages
+    context = get_context_with_summary(session_id, model)
+    
+    # Update the conversation history for the chain
+    history = get_session_history(session_id)
+    
+    # Clear existing history to prevent duplication
+    history.clear()
+    
+    for msg in context:
+        if msg[0] == "Previous conversation summary":
+            history.add_message(AIMessage(content=f"Previous conversation summary: {msg[1]}"))
+        else:
+            history.add_message(HumanMessage(content=msg[0]))
+            history.add_message(AIMessage(content=msg[1]))
+    
+    # Invoke the chain with the updated history
     response = conversational_rag_chain.invoke(
         {"input": question},
         config={"configurable": {"session_id": session_id}},
     )
+    
     return response["answer"]
 
 @app.route('/')
 def home():
-    session['user_id'] = str(uuid.uuid4())  # Always generate a new user_id
+    session['user_id'] = create_new_session()
     return render_template('index.html')
 
 @app.route('/chat', methods=['POST'])
 def chat():
     data = request.json
     user_input = data['message']
-    session_id = session.get('user_id', str(uuid.uuid4()))
+    session_id = session.get('user_id', create_new_session())
     response = time_management_mentor(user_input, session_id)
+    
+    # Save the conversation to the database
+    save_conversation(session_id, user_input, response)
+    
     return jsonify({'response': response})
+
+@app.route('/history', methods=['GET'])
+def get_history():
+    history = get_all_conversation_history()
+    return jsonify({'history': history})
 
 @app.route('/reset_session', methods=['POST'])
 def reset_session():
-    session_id = session.get('user_id')
-    if session_id in store:
-        del store[session_id]
-    session['user_id'] = str(uuid.uuid4())
-    return jsonify({'status': 'success', 'message': 'Session reset successfully'})
+    new_session_id = create_new_session()
+    session['user_id'] = new_session_id
+    return jsonify({'status': 'success', 'message': 'Session reset successfully', 'new_session_id': new_session_id})
 
 if __name__ == '__main__':
+    setup_database()
     app.run(debug=True)
