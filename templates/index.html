@@ -275,7 +275,7 @@
     <div class="chat-container">
         <h1>Mentor Bot</h1>
         <div class='button-container'>
-            {% comment %} <button id="view-history-button">View History</button> {% endcomment %}
+            <button id="view-history-button">View History</button>
             <button id="new-chat-button">+ New Chat</button>
         </div>
         <div id="chatbox"></div>
@@ -432,23 +432,28 @@
             if (message) {
                 addMessage('You', message);
                 userInput.value = '';
-
+    
                 const loadingMessage = addMessage('Mentor', '<span class="loading"></span> thinking...', true);
-
+    
                 try {
                     const response = await fetch('/chat', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
+                        credentials: 'same-origin',  // Add this line to include cookies
                         body: JSON.stringify({ message: message }),
                     });
-
+    
                     if (response.ok) {
                         const data = await response.json();
                         loadingMessage.innerHTML = `<strong>Mentor:</strong> ${marked.parse(data.response)}`;
                     } else {
                         loadingMessage.innerHTML = '<strong>System:</strong> Error: Unable to get response from the server.';
+                        // Reload the page if there's a session error
+                        if (response.status === 401) {
+                            window.location.reload();
+                        }
                     }
                 } catch (error) {
                     loadingMessage.innerHTML = '<strong>System:</strong> Error: Unable to connect to the server.';
@@ -456,22 +461,28 @@
                 chatbox.scrollTop = chatbox.scrollHeight;
             }
         }
-
+    
         async function startNewChat() {
             try {
-                const response = await fetch('/reset_session', { method: 'POST' });
+                const response = await fetch('/reset_session', { 
+                    method: 'POST',
+                    credentials: 'same-origin'  // Add this line to include cookies
+                });
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('New user_id:', data.new_user_id);
+                    console.log('New session started:', data);
                     chatbox.innerHTML = '';
                     addMessage('Mentor', "Hello! I'm here to help you with a new session.");
                 } else {
                     console.error('Failed to reset session');
+                    // Reload the page if there's a session error
+                    window.location.reload();
                 }
             } catch (error) {
                 console.error('Error resetting session:', error);
             }
         }
+    
 
         async function viewHistory() {
             try {
