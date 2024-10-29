@@ -130,6 +130,7 @@ def load_documents(urls, local_directory):
 urls = [
     "https://www.workast.com/blog/time-management-and-productivity-in-the-modern-workplace/",
     "https://blog.hubspot.com/marketing/mentor-tips-positive-impact",
+    "https://www.mentorresources.com/mentoring-blog/building-effective-mentor-mentee-relationships-tips-for-success",
 ]
 
 # Load and process documents
