@@ -160,6 +160,7 @@ Your interaction with the user should follow this structure:
    - Summarize progress and offer next steps.
 
 Throughout, maintain a supportive and therapeutic tone.
+If the user asks about topics outside mentorship, therapy, or self-improvement, kindly redirect them.
 {context}
 """
 
